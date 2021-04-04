@@ -1,4 +1,7 @@
-# [pg_simple](https://github.com/masroore/pg_simple)
+# [Sqlify](https://github.com/masroore/pg_simple)
+This project is a fork from [pg_simple](https://github.com/masroore/pg_simple), that tries to implement a standard SQL
+python type hinting interface.
+Other goals for this project is to support other types of databases like sqlite.
 
 The [pg_simple](https://github.com/masroore/pg_simple) module provides a simple yet efficient layer over `psycopg2` providing Python API for common SQL functions, explicit and implicit transactions management and database connection pooling for single and multi-threaded applications.
 

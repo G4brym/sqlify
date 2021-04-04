@@ -1,25 +1,24 @@
 # -*- coding: utf-8 -*-
-__author__ = 'Masroor Ehsan'
+__author__ = 'Masroor Ehsan and Gabriel Massadas'
 
 import time
 from collections import namedtuple
-import logging
-import os
+from datetime import datetime
+from logging import Logger
+from typing import Optional, List, Tuple, Union, Dict
 
 from psycopg2.extras import DictCursor, NamedTupleCursor
 
 
-class PgSimple(object):
+class Sqlify(object):
     _connection = None
     _cursor = None
-    _log = None
-    _log_fmt = None
+    _logger = None
     _cursor_factory = None
     _pool = None
 
-    def __init__(self, pool, log=None, log_fmt=None, nt_cursor=True):
-        self._log = log
-        self._log_fmt = log_fmt
+    def __init__(self, pool, logger: Logger = None, nt_cursor=True):
+        self._logger = logger
         self._cursor_factory = NamedTupleCursor if nt_cursor else DictCursor
         self._pool = pool
         self._connect()
@@ -30,39 +29,25 @@ class PgSimple(object):
             self._connection = self._pool.get_conn()
             self._cursor = self._connection.cursor(cursor_factory=self._cursor_factory)
         except Exception as e:
-            self._log_error('postgresql connection failed: ' + e.message)
-            raise
+            self._logger.error('postgresql connection failed: ' + str(e))
+            raise e
 
-    def _debug_write(self, msg):
-        if msg and self._log:
-            if isinstance(self._log, logging.Logger):
-                self._log.debug(msg)
-            else:
-                self._log.write(msg + os.linesep)
+    def _format_where(self, where: Optional[Union[Tuple[Union[List, str], Union[List, Dict]], Union[List, str]]]) \
+            -> Optional[Tuple[str, Union[List, Dict]]]:
+        if where and len(where) > 0 and isinstance(where[0], list):
+            # Where is a list, we must convert it into a string
+            where = (" and ".join(where[0]), where[1])
 
-    def _log_cursor(self, cursor):
-        if not self._log:
-            return
+        return where
 
-        if self._log_fmt:
-            msg = self._log_fmt(cursor)
-        else:
-            msg = str(cursor.query)
-
-        self._debug_write(msg)
-
-    def _log_error(self, data):
-        if not self._log:
-            return
-
-        if self._log_fmt:
-            msg = self._log_fmt(data)
-        else:
-            msg = str(data)
-
-        self._debug_write(msg)
-
-    def fetchone(self, table, fields='*', where=None, order=None, offset=None):
+    def fetchone(
+            self,
+            table: str,
+            fields: Optional[Union[str, List[str]]] = "*",
+            where: Optional[Union[Tuple[Union[List, str], Union[List, Dict]], Union[List, str]]] = None,
+            order: Optional[Tuple[str, str]] = None,
+            offset: int = None,
+    ) -> Optional[Dict]:
         """Get a single result
 
             table = (str) table_name
@@ -71,10 +56,19 @@ class PgSimple(object):
                     eg: ("id=%s and name=%s", [1, "test"])
             order = [field, ASC|DESC]
         """
+        where = self._format_where(where)
         cur = self._select(table, fields, where, order, 1, offset)
         return cur.fetchone()
 
-    def fetchall(self, table, fields='*', where=None, order=None, limit=None, offset=None):
+    def fetchall(
+            self,
+            table: str,
+            fields: Optional[Union[str, List[str]]] = "*",
+            where: Optional[Union[Tuple[Union[List, str], Union[List, Dict]], Union[List, str]]] = None,
+            order: Optional[Tuple[str, str]] = None,
+            limit: Optional[int] = None,
+            offset: Optional[int] = None,
+    ) -> Optional[List[Dict]]:
         """Get all results
 
             table = (str) table_name
@@ -84,6 +78,7 @@ class PgSimple(object):
             order = [field, ASC|DESC]
             limit = [limit, offset]
         """
+        where = self._format_where(where)
         cur = self._select(table, fields, where, order, limit, offset)
         return cur.fetchall()
 
@@ -108,7 +103,12 @@ class PgSimple(object):
 
         return rows
 
-    def insert(self, table, data, returning=None):
+    def insert(
+            self,
+            table: str,
+            data: Dict[str, Union[str, datetime, int, bool]],
+            returning: str = None,
+    ) -> Optional[Dict]:
         """Insert a record"""
         cols, vals = self._format_insert(data)
         sql = 'INSERT INTO %s (%s) VALUES(%s)' % (table, cols, vals)
@@ -116,17 +116,30 @@ class PgSimple(object):
         cur = self.execute(sql, list(data.values()))
         return cur.fetchone() if returning else cur.rowcount
 
-    def update(self, table, data, where=None, returning=None):
+    def update(
+            self,
+            table: str,
+            data: Dict[str, Union[str, datetime, int, bool]],
+            where: Optional[Union[Tuple[Union[List, str], Union[List, Dict]], Union[List, str]]] = None,
+            returning: str = None,
+    ) -> Optional[Dict]:
         """Insert a record"""
         query = self._format_update(data)
+        where = self._format_where(where)
 
         sql = 'UPDATE %s SET %s' % (table, query)
         sql += self._where(where) + self._returning(returning)
         cur = self.execute(sql, list(data.values()) + where[1] if where and len(where) > 1 else list(data.values()))
         return cur.fetchall() if returning else cur.rowcount
 
-    def delete(self, table, where=None, returning=None):
+    def delete(
+            self,
+            table: str,
+            where: Optional[Union[Tuple[Union[List, str], Union[List, Dict]], Union[List, str]]] = None,
+            returning: str = None,
+    ) -> Optional[Dict]:
         """Delete rows based on a where condition"""
+        where = self._format_where(where)
         sql = 'DELETE FROM %s' % table
         sql += self._where(where) + self._returning(returning)
         cur = self.execute(sql, where[1] if where and len(where) > 1 else None)
@@ -135,15 +148,12 @@ class PgSimple(object):
     def execute(self, sql, params=None):
         """Executes a raw query"""
         try:
-            if self._log and self._log_fmt:
-                self._cursor.timestamp = time.time()
+            self._cursor.timestamp = time.time()
             self._cursor.execute(sql, params)
-            if self._log and self._log_fmt:
-                self._log_cursor(self._cursor)
+            self._logger.debug(self._cursor.query)
         except Exception as e:
-            if self._log and self._log_fmt:
-                self._log_error('execute() failed: ' + e.message)
-            raise
+            self._logger.error('execute() failed: ' + str(e))
+            raise e
 
         return self._cursor
 
@@ -198,7 +208,7 @@ class PgSimple(object):
         return "=%s,".join(data.keys()) + "=%s"
 
     def _where(self, where=None):
-        if where and len(where) > 0:
+        if where and len(where) > 0 and where[0]:
             return ' WHERE %s' % where[0]
         return ''
 
@@ -256,10 +266,10 @@ class PgSimple(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         if not isinstance(exc_value, Exception):
-            self._debug_write('Committing transaction')
+            self._logger.debug('Committing transaction')
             self.commit()
         else:
-            self._debug_write('Rolling back transaction')
+            self._logger.debug('Rolling back transaction')
             self.rollback()
 
         self._cursor.close()
