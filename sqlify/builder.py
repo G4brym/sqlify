@@ -1,36 +1,34 @@
 # -*- coding: utf-8 -*-
-__author__ = 'Masroor Ehsan and Gabriel Massadas'
-
 import time
 from collections import namedtuple
 from datetime import datetime
-from logging import Logger
 from typing import Optional, List, Tuple, Union, Dict
 
-from psycopg2.extras import DictCursor, NamedTupleCursor
+
+class SqlOperator:
+    pass
+
+
+class RawSQL(SqlOperator, str):
+    pass
+
+
+class IncreaseSQL(SqlOperator, float):
+    pass
+
+
+class DecreaseSQL(SqlOperator, float):
+    pass
 
 
 class Sqlify(object):
     _connection = None
     _cursor = None
     _logger = None
-    _cursor_factory = None
-    _pool = None
 
-    def __init__(self, pool, logger: Logger = None, nt_cursor=True):
+    def __init__(self, connection, logger):
         self._logger = logger
-        self._cursor_factory = NamedTupleCursor if nt_cursor else DictCursor
-        self._pool = pool
-        self._connect()
-
-    def _connect(self):
-        """Connect to the postgres server"""
-        try:
-            self._connection = self._pool.get_conn()
-            self._cursor = self._connection.cursor(cursor_factory=self._cursor_factory)
-        except Exception as e:
-            self._logger.error('postgresql connection failed: ' + str(e))
-            raise e
+        self._connection = connection
 
     def _format_where(self, where: Optional[Union[Tuple[Union[List, str], Union[List, Dict]], Union[List, str]]]) \
             -> Optional[Tuple[str, Union[List, Dict]]]:
@@ -273,7 +271,10 @@ class Sqlify(object):
             self.rollback()
 
         self._cursor.close()
+        if self._connection.is_open():
+            self._connection.close()
 
     def __del__(self):
-        if self._connection:
-            self._pool.put_conn(self._connection, fail_silently=True)
+        self._cursor.close()
+        if self._connection.is_open():
+            self._connection.close()

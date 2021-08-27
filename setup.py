@@ -11,10 +11,12 @@ except:
     long_description = 'A simple sql builder based on standard Python type hints'
 
 setup(
-    name=sqlify.__name__,
+    name="sqlify",
     version=sqlify.VERSION,
     packages=find_packages(),
-    install_requires=['psycopg2-binary'],
+    extras_require = {
+        'postgresql':  ["psycopg2-binary"]
+    },
     classifiers=['Topic :: Database',
                  'Programming Language :: Python',
                  'Programming Language :: Python :: 3',
@@ -26,10 +28,10 @@ setup(
                  'Operating System :: OS Independent',
                  'Intended Audience :: Developers',
                  'Development Status :: 3 - Alpha'],
-    author='Gabriel Massadas',
+    author='Gabriel',
     description='A simple sql builder based on standard Python type hints',
     long_description=long_description,
     license='BSD',
-    keywords='psycopg2 postgresql sql database',
+    keywords='psycopg2 postgresql sqlite sqlite3 sql database',
     url='https://github.com/G4brym/sqlify',
 )
