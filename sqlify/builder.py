@@ -3,7 +3,7 @@ from collections import namedtuple
 from datetime import datetime
 from io import StringIO
 from logging import Logger
-from typing import Optional, List, Tuple, Union, Dict, IO, Iterable
+from typing import Optional, List, Tuple, Union, Dict, IO, Any
 
 from .operators import RawSQL, IncreaseSQL, DecreaseSQL, SqlOperator
 from .value_objects import Order, Fetch
@@ -18,7 +18,7 @@ class BaseSqlify(object):
         self._logger = logger
 
     @property
-    def _database_parameter_format(self):
+    def _unnamed_parameter(self):
         raise NotImplementedError("Database parameter not defined")
 
     def _format_parameter(self, parameter: str) -> str:
@@ -36,10 +36,11 @@ class BaseSqlify(object):
             self,
             table: str,
             fields: Optional[Union[str, List[str]]] = "*",
-            where: Optional[Tuple[Union[List, str], Union[List, Dict]]] = None,
-            order: Optional[Tuple[str, Union[Order, str]]] = None,
+            where: Optional[Union[str, List[str], Tuple[Union[List[str], str], Union[List, Dict]]]] = None,
+            group: Optional[Union[List[str], str]] = None,
+            order: Optional[Union[str, Tuple[str, Union[Order, str]]]] = None,
             offset: int = None,
-    ) -> Optional[Dict]:
+    ) -> Optional[Union[Dict, List]]:
         """Get a single result
         table = (str) table_name
         fields = (field1, field2 ...) list of fields to select
@@ -47,19 +48,30 @@ class BaseSqlify(object):
                 eg: ("id=%s and name=%s", [1, "test"])
         order = [field, ASC|DESC]
         """
-        where = self._format_where(where)
-        cur = self._select(table, fields, where, order, 1, offset)
+        conditions, parameters = self._split_where(where)
+
+        sql = self._select(
+            table=table,
+            fields=fields,
+            where=conditions,
+            group=group,
+            order=order,
+            limit=1,
+            offset=offset,
+        )
+        cur = self.execute(sql, parameters)
         return cur.fetchone()
 
     def fetchall(
             self,
             table: str,
             fields: Optional[Union[str, List[str]]] = "*",
-            where: Optional[Tuple[Union[List, str], Union[List, Dict]]] = None,
-            order: Optional[Tuple[str, Order]] = None,
+            where: Optional[Union[str, List[str], Tuple[Union[List[str], str], Union[List, Dict]]]] = None,
+            group: Optional[Union[List[str], str]] = None,
+            order: Optional[Union[str, Tuple[str, Union[Order, str]]]] = None,
             limit: Optional[int] = None,
             offset: Optional[int] = None,
-    ) -> Optional[List[Dict]]:
+    ) -> Optional[List[Union[Dict, List]]]:
         """Get all results
         table = (str) table_name
         fields = (field1, field2 ...) list of fields to select
@@ -68,8 +80,18 @@ class BaseSqlify(object):
         order = [field, ASC|DESC]
         limit = [limit, offset]
         """
-        where = self._format_where(where)
-        cur = self._select(table, fields, where, order, limit, offset)
+        conditions, parameters = self._split_where(where)
+
+        sql = self._select(
+            table=table,
+            fields=fields,
+            where=conditions,
+            group=group,
+            order=order,
+            limit=limit,
+            offset=offset,
+        )
+        cur = self.execute(sql, parameters)
         return cur.fetchall()
 
     def join(
@@ -91,7 +113,6 @@ class BaseSqlify(object):
         order = [field, ASC|DESC]
         limit = [limit1, limit2]
         """
-        where = self._format_where(where)
         cur = self._join(tables, fields, join_fields, where, order, limit, offset)
         result = cur.fetchall()
 
@@ -123,11 +144,10 @@ class BaseSqlify(object):
             returning: str = None,
     ) -> Optional[Dict]:
         """Insert a record"""
-        where = self._format_where(where)
         query = self._format_update(data)
         arguments = {}
         for key, value in data.items():
-            arguments[key + "_datainput"] = value
+            arguments[key + "_datainput"] = value  # TODO
 
         sql = "UPDATE {} SET {}".format(table, query)
         sql += self._where(where) + self._returning(returning)
@@ -145,7 +165,6 @@ class BaseSqlify(object):
             returning: str = None,
     ) -> Optional[Dict]:
         """Delete rows based on a where condition"""
-        where = self._format_where(where)
         sql = f"DELETE FROM {table}"
         sql += self._where(where) + self._returning(returning)
         cur = self.execute(sql, where[1] if where and len(where) > 1 else None)
@@ -156,7 +175,7 @@ class BaseSqlify(object):
             sql,
             params=None,
             fetch: Optional[Fetch] = None,
-    ) -> Union[None, Iterable, Dict]:
+    ) -> Any:
         """Executes a raw query"""
         # self._cursor.timestamp = time.time()
         self._cursor.execute(sql, params or ())
@@ -182,8 +201,7 @@ class BaseSqlify(object):
         order = [field, ASC|DESC]
         limit = [limit, offset]
         """
-        where = self._format_where(where)
-        sql = self._format_select(table, fields, where, order, limit, offset)
+        sql = self._select(table, fields, where, order, limit, offset)
         sql = f"copy ({sql}) to stdout with csv delimiter ',' header"
         sql = self._cursor.mogrify(sql, where[1] if where and len(where) > 1 else None)
 
@@ -224,7 +242,7 @@ class BaseSqlify(object):
     def _format_insert(self, data):
         """Format insert dict values into strings"""
         cols = ",".join(data.keys())
-        vals = ",".join([self._database_parameter_format for k in data])
+        vals = ",".join([self._unnamed_parameter for k in data])
 
         return cols, vals
 
@@ -242,62 +260,89 @@ class BaseSqlify(object):
                 arguments.append(f"{key} = {self._format_parameter(key + '_datainput')}")
         return ",".join(arguments)  # This removed the last comma in string
 
-    def _where(self, where=None):
-        if where and len(where) > 0 and where[0]:
-            return " WHERE %s" % where[0]
-        return ""
+    def _split_where(self,
+                     where: Optional[Union[str, List[str], Tuple[Union[List[str], str], Union[List, Dict]]]] = None) \
+            -> Tuple[Union[str, List[str], None], Union[List, Dict, None]]:
+        if not where:
+            return (None, None)
 
-    def _order(self, order=None):
-        sql = ""
-        if order:
-            sql += " ORDER BY %s" % order[0]
+        if not isinstance(where, tuple):
+            return (where, None)
 
-            if len(order) > 1:
-                sql += " %s" % (order[1].value if isinstance(order[1], Order) else order[1])
-        return sql
+        if len(where) == 1:
+            return (where[1], None)
 
-    def _limit(self, limit):
+        return (where[0], where[1])
+
+    def _where(self, conditions: Optional[Union[List, str]] = None) -> str:
+        if not conditions:
+            return ""
+
+        if isinstance(conditions, list):
+            return f" WHERE {' AND '.join(conditions)} "
+
+        return f" WHERE {conditions} "
+
+    def _group(self, group: Optional[Union[List[str], str]] = None) -> str:
+        if not group:
+            return ""
+
+        if isinstance(group, list):
+            return f" GROUP BY {', '.join(group)} "
+
+        return f" GROUP BY {group} "
+
+    def _order(self, order: Optional[Union[str, Tuple[str, Union[Order, str]]]] = None) -> str:
+        if not order:
+            return ""
+
+        if isinstance(order, str):
+            return f" ORDER BY {order} "
+
+        # If order is not a string, then it must be a tuple, here we just need to check the type of the 2º parameter
+        if isinstance(order[1], str):
+            return f" ORDER BY {order} {order[1]} "
+
+        # Second parameter must be of type Order
+        return f" ORDER BY {order} {order[1].value} "
+
+    def _limit(self, limit: Optional[int]) -> str:
         if limit:
-            return " LIMIT %d" % limit
+            return f" LIMIT {limit} "
         return ""
 
-    def _offset(self, offset):
+    def _offset(self, offset: Optional[int]) -> str:
         if offset:
-            return " OFFSET %d" % offset
+            return f" OFFSET {offset} "
         return ""
 
-    def _returning(self, returning):
-        if returning:
-            return " RETURNING %s" % returning
-        return ""
+    def _returning(self, returning: Optional[Union[str, List[str]]]) -> str:
+        if not returning:
+            return ""
 
-    def _format_select(
-            self, table=None, fields=(), where=None, order=None, limit=None, offset=None
-    ):
+        if isinstance(returning, list):
+            return f" RETURNING {', '.join(returning)} "
+
+        return f" RETURNING {returning} "
+
+    def _fields(self, fields: Union[str, List[str]]) -> str:
         if isinstance(fields, str):
-            fields = [fields]  # TODO: move this out of here
+            return fields
 
+        # It must be a list of strings
+        return ', '.join(fields)
+
+    def _select(
+            self, table=None, fields=(), where=None, group=None, order=None, limit=None, offset=None
+    ) -> str:
         return (
-                "SELECT {} FROM {}".format(",".join(fields), table)
+                f"SELECT {self._fields(fields)} FROM {table}"
                 + self._where(where)
+                + self._group(group)
                 + self._order(order)
                 + self._limit(limit)
                 + self._offset(offset)
         )
-
-    def _select(
-            self, table=None, fields=(), where=None, order=None, limit=None, offset=None
-    ):
-        """Run a select query"""
-        sql = self._format_select(
-            table=table,
-            fields=fields,
-            where=where,
-            order=order,
-            limit=limit,
-            offset=offset,
-        )
-        return self.execute(sql, where[1] if where and len(where) == 2 else None)
 
     def _join(
             self,
@@ -341,14 +386,14 @@ class BaseSqlify(object):
 
 
 class Psycopg2Sqlify(BaseSqlify):
-    _database_parameter_format = "%s"
+    _unnamed_parameter = "%s"
 
     def _format_parameter(self, parameter: str) -> str:
         return f"%({parameter})s"
 
 
 class Sqlite3Sqlify(BaseSqlify):
-    _database_parameter_format = "?"
+    _unnamed_parameter = "?"
 
     def _format_parameter(self, parameter: str) -> str:
         return f":{parameter}"
