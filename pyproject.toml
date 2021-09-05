@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sqlify"
-version = "0"
+version = "0.4.0"
 description = "A simple sql builder based on standard Python type hints."
 authors = ["Gabriel Massadas"]
 readme = "README.md"
@@ -30,7 +30,6 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = "^3.7.0"
-sqlite3 = { version = "*", optional = true }
 psycopg2-binary = { version = "*", optional = true }
 
 [tool.poetry.dev-dependencies]
@@ -47,7 +46,6 @@ isort = "^5.9.3"
 
 [tool.poetry.extras]
 postgresql = [ "psycopg2-binary" ]
-sqlite = [ "sqlite3" ]
 
 [build-system]
 requires = ["poetry-core"]
@@ -59,7 +57,7 @@ source = "init"
 [tool.coverage.run]
 parallel = true
 source = [
-    "docs_src",
+#    "docs_src",
     "tests",
     "sqlify"
 ]

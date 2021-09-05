@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-VERSION = '0.3.0'
+__version__ = '0.4.0'
 __all__ = [
     "BaseSqlify",
     "Sqlite3Sqlify",
