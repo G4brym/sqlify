@@ -140,20 +140,20 @@ class BaseSqlify(object):
             self,
             table: str,
             data: Dict[str, Union[str, bool, int, datetime, SqlOperator]],
-            where: Optional[Tuple[Union[List, str], Union[List, Dict]]] = None,
+            where: Optional[Union[str, List[str], Tuple[Union[List[str], str], Union[List, Dict]]]] = None,
             returning: str = None,
     ) -> Optional[Dict]:
         """Insert a record"""
+        conditions, parameters = self._split_where(where)
         query = self._format_update(data)
         arguments = {}
         for key, value in data.items():
             arguments[key + "_datainput"] = value  # TODO
 
         sql = "UPDATE {} SET {}".format(table, query)
-        sql += self._where(where) + self._returning(returning)
+        sql += self._where(conditions) + self._returning(returning)
 
-        if where and len(where) > 1 and where[1]:
-            arguments.update(where[1])
+        arguments.update(parameters)
 
         cur = self.execute(sql, arguments)
         return cur.fetchall() if returning else cur.rowcount
@@ -165,9 +165,11 @@ class BaseSqlify(object):
             returning: str = None,
     ) -> Optional[Dict]:
         """Delete rows based on a where condition"""
+        conditions, parameters = self._split_where(where)
+
         sql = f"DELETE FROM {table}"
-        sql += self._where(where) + self._returning(returning)
-        cur = self.execute(sql, where[1] if where and len(where) > 1 else None)
+        sql += self._where(conditions) + self._returning(returning)
+        cur = self.execute(sql, parameters)
         return cur.fetchall() if returning else cur.rowcount
 
     def execute(
@@ -201,9 +203,11 @@ class BaseSqlify(object):
         order = [field, ASC|DESC]
         limit = [limit, offset]
         """
-        sql = self._select(table, fields, where, order, limit, offset)
+        conditions, parameters = self._split_where(where)
+
+        sql = self._select(table, fields, conditions, order, limit, offset)
         sql = f"copy ({sql}) to stdout with csv delimiter ',' header"
-        sql = self._cursor.mogrify(sql, where[1] if where and len(where) > 1 else None)
+        sql = self._cursor.mogrify(sql, parameters)
 
         return self._cursor.copy_expert(sql=sql, file=file)
 
@@ -241,8 +245,8 @@ class BaseSqlify(object):
 
     def _format_insert(self, data):
         """Format insert dict values into strings"""
-        cols = ",".join(data.keys())
-        vals = ",".join([self._unnamed_parameter for k in data])
+        cols = ", ".join(data.keys())
+        vals = ", ".join([self._unnamed_parameter for k in data])
 
         return cols, vals
 
@@ -251,13 +255,13 @@ class BaseSqlify(object):
         arguments = []
         for key, value in data.items():
             if isinstance(value, RawSQL):
-                arguments.append(f"{key} = {value}")
+                arguments.append(f"{key} = {value} ")
             elif isinstance(value, IncreaseSQL):
-                arguments.append(f"{key} = {key} + {self._format_parameter(key + '_datainput')}")
+                arguments.append(f"{key} = {key} + {self._format_parameter(key + '_datainput')} ")
             elif isinstance(value, DecreaseSQL):
-                arguments.append(f"{key} = {key} - {self._format_parameter(key + '_datainput')}")
+                arguments.append(f"{key} = {key} - {self._format_parameter(key + '_datainput')} ")
             else:
-                arguments.append(f"{key} = {self._format_parameter(key + '_datainput')}")
+                arguments.append(f"{key} = {self._format_parameter(key + '_datainput')} ")
         return ",".join(arguments)  # This removed the last comma in string
 
     def _split_where(self,
@@ -355,6 +359,7 @@ class BaseSqlify(object):
             offset=None,
     ):
         """Run an inner left join query"""
+        conditions, parameters = self._split_where(where)
 
         fields = [tables[0] + "." + f for f in fields[0]] + [
             tables[1] + "." + f for f in fields[1]
@@ -369,13 +374,13 @@ class BaseSqlify(object):
         )
 
         sql += (
-                self._where(where)
+                self._where(conditions)
                 + self._order(order)
                 + self._limit(limit)
                 + self._offset(offset)
         )
 
-        return self.execute(sql, where[1] if where and len(where) > 1 else None)
+        return self.execute(sql, parameters)
 
     def __del__(self):
         try:

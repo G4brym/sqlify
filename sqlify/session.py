@@ -26,15 +26,17 @@ class Session(object):
 
         if database_type is not None:
             self._database_type = database_type
-        elif isinstance(self._connection, psycopg2_connection):
+        elif psycopg2_connection and isinstance(self._connection, psycopg2_connection):
             self._database_type = DatabaseType.PSYCOPG2
             self._manager = Psycopg2Sqlify
-        elif isinstance(self._connection, sqlite3_connection):
+        elif sqlite3_connection and isinstance(self._connection, sqlite3_connection):
             self._database_type = DatabaseType.SQLITE3
             self._manager = Sqlite3Sqlify
         else:
             raise RuntimeError(
                 "Could not detect the correct database type, please supply the 'database_type' parameter")
+
+        self.session = self._manager(self.get_cursor())
 
     @property
     def is_open(self) -> bool:
@@ -51,7 +53,7 @@ class Session(object):
         return self._connection.cursor()
 
     def __enter__(self):
-        return self._manager(self.get_cursor())
+        return self.session
 
     def __exit__(self, type_, value, traceback):
         if self._autocommit:
