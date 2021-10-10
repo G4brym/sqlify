@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from collections import namedtuple
 from datetime import datetime
 from io import StringIO
 from logging import Logger
@@ -38,8 +37,10 @@ class BaseSqlify(object):
             fields: Optional[Union[str, List[str]]] = "*",
             where: Optional[Union[str, List[str], Tuple[Union[List[str], str], Union[List, Dict]]]] = None,
             group: Optional[Union[List[str], str]] = None,
+            having: Optional[str] = None,
             order: Optional[Union[str, Tuple[str, Union[Order, str]]]] = None,
             offset: int = None,
+            with_sq: Optional[Dict[str, str]] = None,
     ) -> Optional[Union[Dict, List]]:
         """Get a single result
         table = (str) table_name
@@ -55,9 +56,11 @@ class BaseSqlify(object):
             fields=fields,
             where=conditions,
             group=group,
+            having=having,
             order=order,
             limit=1,
             offset=offset,
+            with_sq=with_sq,
         )
         cur = self.execute(sql, parameters)
         return cur.fetchone()
@@ -68,9 +71,11 @@ class BaseSqlify(object):
             fields: Optional[Union[str, List[str]]] = "*",
             where: Optional[Union[str, List[str], Tuple[Union[List[str], str], Union[List, Dict]]]] = None,
             group: Optional[Union[List[str], str]] = None,
+            having: Optional[str] = None,
             order: Optional[Union[str, Tuple[str, Union[Order, str]]]] = None,
             limit: Optional[int] = None,
             offset: Optional[int] = None,
+            with_sq: Optional[Dict[str, str]] = None,
     ) -> Optional[List[Union[Dict, List]]]:
         """Get all results
         table = (str) table_name
@@ -87,41 +92,14 @@ class BaseSqlify(object):
             fields=fields,
             where=conditions,
             group=group,
+            having=having,
             order=order,
             limit=limit,
             offset=offset,
+            with_sq=with_sq,
         )
         cur = self.execute(sql, parameters)
         return cur.fetchall()
-
-    def join(
-            self,
-            tables=(),
-            fields=(),
-            join_fields=(),
-            where=None,
-            order=None,
-            limit=None,
-            offset=None,
-    ):
-        """Run an inner left join query
-        tables = (table1, table2)
-        fields = ([fields from table1], [fields from table 2])  # fields to select
-        join_fields = (field1, field2)  # fields to join. field1 belongs to table1 and field2 belongs to table 2
-        where = ("parameterized_statement", [parameters])
-                eg: ("id=%s and name=%s", [1, "test"])
-        order = [field, ASC|DESC]
-        limit = [limit1, limit2]
-        """
-        cur = self._join(tables, fields, join_fields, where, order, limit, offset)
-        result = cur.fetchall()
-
-        rows = None
-        if result:
-            Row = namedtuple("Row", [f[0] for f in cur.description])
-            rows = [Row(*r) for r in result]
-
-        return rows
 
     def insert(
             self,
@@ -287,6 +265,20 @@ class BaseSqlify(object):
 
         return f" WHERE {conditions} "
 
+    def _having(self, having: Optional[str] = None) -> str:
+        if not having:
+            return ""
+
+        return f" HAVING {having} "
+
+    def _with_sq(self, with_sq: Optional[Dict[str, str]] = None) -> str:
+        if not with_sq:
+            return ""
+
+        return "WITH " + ", ".join(
+            [f" {key} as ({value}) " for key, value in with_sq.items()]
+        )
+
     def _group(self, group: Optional[Union[List[str], str]] = None) -> str:
         if not group:
             return ""
@@ -337,50 +329,19 @@ class BaseSqlify(object):
         return ', '.join(fields)
 
     def _select(
-            self, table=None, fields=(), where=None, group=None, order=None, limit=None, offset=None
+            self, table=None, fields=(), where=None, group=None, having=None, order=None, limit=None, offset=None,
+            with_sq=None
     ) -> str:
         return (
-                f"SELECT {self._fields(fields)} FROM {table}"
+                self._with_sq(with_sq)
+                + f"SELECT {self._fields(fields)} FROM {table}"
                 + self._where(where)
                 + self._group(group)
+                + self._having(having)
                 + self._order(order)
                 + self._limit(limit)
                 + self._offset(offset)
         )
-
-    def _join(
-            self,
-            tables=(),
-            fields=(),
-            join_fields=(),
-            where=None,
-            order=None,
-            limit=None,
-            offset=None,
-    ):
-        """Run an inner left join query"""
-        conditions, parameters = self._split_where(where)
-
-        fields = [tables[0] + "." + f for f in fields[0]] + [
-            tables[1] + "." + f for f in fields[1]
-        ]
-
-        sql = "SELECT {:s} FROM {:s} LEFT JOIN {:s} ON ({:s} = {:s})".format(
-            ",".join(fields),
-            tables[0],
-            tables[1],
-            "{}.{}".format(tables[0], join_fields[0]),
-            "{}.{}".format(tables[1], join_fields[1]),
-        )
-
-        sql += (
-                self._where(conditions)
-                + self._order(order)
-                + self._limit(limit)
-                + self._offset(offset)
-        )
-
-        return self.execute(sql, parameters)
 
     def __del__(self):
         try:
