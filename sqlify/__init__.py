@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+"""A simple sql builder based on standard Python type hints"""
 
 __version__ = '0.4.2'
 __all__ = [
