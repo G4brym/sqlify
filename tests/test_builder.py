@@ -27,7 +27,7 @@ class TestBuilder(TestCase):
     def test_fetchall_multiple_field(self):
         self.sqlify.fetchall(self.table_name, fields=["bonus", "ts"])
 
-        self.assertQuery("select bonus,ts from {table}")
+        self.assertQuery("select bonus, ts from {table}")
 
     def test_fetchall_single_field(self):
         self.sqlify.fetchall(self.table_name, fields="bonus")
@@ -149,7 +149,7 @@ class TestBuilder(TestCase):
     def test_insert(self):
         self.sqlify.insert(self.table_name, data=dict(asd="test", ts="123"))
 
-        self.assertQuery("insert into {table} (asd,ts) values(%s,%s)")
+        self.assertQuery("insert into {table} (asd, ts) values(%s, %s)")
 
     def test_insert_returning_everything(self):
         self.sqlify.insert(
@@ -158,13 +158,13 @@ class TestBuilder(TestCase):
             returning="*",
         )
 
-        self.assertQuery("insert into {table} (asd,ts) values(%s,%s) returning *")
+        self.assertQuery("insert into {table} (asd, ts) values(%s, %s) returning *")
 
     def test_update_no_conditions(self):
         self.sqlify.update(self.table_name, data=dict(asd="test", ts="123"))
 
         self.assertQuery(
-            "update test_table set asd = %(asd_datainput)s,ts = %(ts_datainput)s"
+            "update test_table set asd = %(asd_datainput)s, ts = %(ts_datainput)s"
         )
 
     def test_update_with_conditions(self):
@@ -181,7 +181,7 @@ class TestBuilder(TestCase):
         )
 
         self.assertQuery(
-            "update test_table set asd = %(asd_datainput)s,"
+            "update test_table set asd = %(asd_datainput)s, "
             "ts = %(ts_datainput)s "
             "where bonus_key = %(bonus_key)s and ts = %(ts)s"
         )
@@ -238,8 +238,7 @@ class TestBuilder(TestCase):
         )
 
         self.assertQuery(
-            "update test_table set asd = %(asd_datainput)s,"
-            "ts = %(ts_datainput)s "
+            "update test_table set asd = %(asd_datainput)s, ts = %(ts_datainput)s "
             "where bonus_key = %(bonus_key)s and ts = %(ts)s "
             "returning *"
         )
@@ -264,7 +263,7 @@ class TestBuilder(TestCase):
         )
 
         self.assertQuery(
-            "delete from test_table where bonus_key = %(bonus_key)s " "and ts = %(ts)s"
+            "delete from test_table where bonus_key = %(bonus_key)s and ts = %(ts)s"
         )
 
     def test_delete_with_conditions_returning_everything(self):

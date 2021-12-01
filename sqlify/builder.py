@@ -106,7 +106,7 @@ class BaseSqlify(object):
             table: str,
             data: Dict[str, Union[str, bool, int, datetime]],
             returning: str = None,
-    ) -> Optional[Dict]:
+    ) -> Optional[Union[Dict, int]]:
         """Insert a record"""
         cols, vals = self._format_insert(data)
         sql = "INSERT INTO {} ({}) VALUES({})".format(table, cols, vals)
@@ -120,7 +120,7 @@ class BaseSqlify(object):
             data: Dict[str, Union[str, bool, int, datetime, SqlOperator]],
             where: Optional[Union[str, List[str], Tuple[Union[List[str], str], Union[List, Dict]]]] = None,
             returning: str = None,
-    ) -> Optional[Dict]:
+    ) -> Optional[Union[Dict, int]]:
         """Insert a record"""
         conditions, parameters = self._split_where(where)
         query = self._format_update(data)
@@ -131,7 +131,8 @@ class BaseSqlify(object):
         sql = "UPDATE {} SET {}".format(table, query)
         sql += self._where(conditions) + self._returning(returning)
 
-        arguments.update(parameters)
+        if parameters is not None:
+            arguments.update(parameters)
 
         cur = self.execute(sql, arguments)
         return cur.fetchall() if returning else cur.rowcount
@@ -141,7 +142,7 @@ class BaseSqlify(object):
             table: str,
             where: Optional[Tuple[Union[List, str], Union[List, Dict]]] = None,
             returning: str = None,
-    ) -> Optional[Dict]:
+    ) -> Optional[Union[Dict, int]]:
         """Delete rows based on a where condition"""
         conditions, parameters = self._split_where(where)
 
@@ -233,14 +234,14 @@ class BaseSqlify(object):
         arguments = []
         for key, value in data.items():
             if isinstance(value, RawSQL):
-                arguments.append(f"{key} = {value} ")
+                arguments.append(f"{key} = {value}")
             elif isinstance(value, IncreaseSQL):
-                arguments.append(f"{key} = {key} + {self._format_parameter(key + '_datainput')} ")
+                arguments.append(f"{key} = {key} + {self._format_parameter(key + '_datainput')}")
             elif isinstance(value, DecreaseSQL):
-                arguments.append(f"{key} = {key} - {self._format_parameter(key + '_datainput')} ")
+                arguments.append(f"{key} = {key} - {self._format_parameter(key + '_datainput')}")
             else:
-                arguments.append(f"{key} = {self._format_parameter(key + '_datainput')} ")
-        return ",".join(arguments)  # This removed the last comma in string
+                arguments.append(f"{key} = {self._format_parameter(key + '_datainput')}")
+        return ", ".join(arguments)  # This removed the last comma in string
 
     def _split_where(self,
                      where: Optional[Union[str, List[str], Tuple[Union[List[str], str], Union[List, Dict]]]] = None) \
@@ -261,22 +262,22 @@ class BaseSqlify(object):
             return ""
 
         if isinstance(conditions, list):
-            return f" WHERE {' AND '.join(conditions)} "
+            return f" WHERE {' AND '.join(conditions)}"
 
-        return f" WHERE {conditions} "
+        return f" WHERE {conditions}"
 
     def _having(self, having: Optional[str] = None) -> str:
         if not having:
             return ""
 
-        return f" HAVING {having} "
+        return f" HAVING {having}"
 
     def _with_sq(self, with_sq: Optional[Dict[str, str]] = None) -> str:
         if not with_sq:
             return ""
 
         return "WITH " + ", ".join(
-            [f" {key} as ({value}) " for key, value in with_sq.items()]
+            [f"{key} as ({value})" for key, value in with_sq.items()]
         )
 
     def _group(self, group: Optional[Union[List[str], str]] = None) -> str:
@@ -284,7 +285,7 @@ class BaseSqlify(object):
             return ""
 
         if isinstance(group, list):
-            return f" GROUP BY {', '.join(group)} "
+            return f" GROUP BY {', '.join(group)}"
 
         return f" GROUP BY {group} "
 
@@ -293,23 +294,23 @@ class BaseSqlify(object):
             return ""
 
         if isinstance(order, str):
-            return f" ORDER BY {order} "
+            return f" ORDER BY {order}"
 
         # If order is not a string, then it must be a tuple, here we just need to check the type of the 2º parameter
         if isinstance(order[1], str):
-            return f" ORDER BY {order} {order[1]} "
+            return f" ORDER BY {order[0]} {order[1]}"
 
         # Second parameter must be of type Order
-        return f" ORDER BY {order} {order[1].value} "
+        return f" ORDER BY {order[0]} {order[1].value}"
 
     def _limit(self, limit: Optional[int]) -> str:
         if limit:
-            return f" LIMIT {limit} "
+            return f" LIMIT {limit}"
         return ""
 
     def _offset(self, offset: Optional[int]) -> str:
         if offset:
-            return f" OFFSET {offset} "
+            return f" OFFSET {offset}"
         return ""
 
     def _returning(self, returning: Optional[Union[str, List[str]]]) -> str:
@@ -317,9 +318,9 @@ class BaseSqlify(object):
             return ""
 
         if isinstance(returning, list):
-            return f" RETURNING {', '.join(returning)} "
+            return f" RETURNING {', '.join(returning)}"
 
-        return f" RETURNING {returning} "
+        return f" RETURNING {returning}"
 
     def _fields(self, fields: Union[str, List[str]]) -> str:
         if isinstance(fields, str):

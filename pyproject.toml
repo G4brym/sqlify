@@ -5,7 +5,6 @@ build-backend = "flit.buildapi"
 [tool.flit.metadata]
 module = "sqlify"
 author = "Gabriel Massadas"
-description = "A simple sql builder based on standard Python type hints."
 home-page = "https://github.com/G4brym/sqlify"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -51,7 +50,7 @@ doc = [
     "typer-cli >=0.0.12,<0.0.13",
     "pyyaml >=5.3.1,<6.0.0"
 ]
-dev = [
+all = [
     "psycopg2-binary>=2.9.0",
 ]
 
