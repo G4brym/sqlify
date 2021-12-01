@@ -3,7 +3,5 @@
 set -e
 set -x
 
-coverage run -m pytest tests
-#coverage combine
+pytest --cov=sqlify/ --cov-fail-under=60
 coverage report --show-missing
-coverage xml
