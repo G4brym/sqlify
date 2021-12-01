@@ -1,14 +1,12 @@
-[tool.poetry]
-name = "sqlify"
-version = "0.4.0"
+[build-system]
+requires = ["flit"]
+build-backend = "flit.buildapi"
+
+[tool.flit.metadata]
+module = "sqlify"
+author = "Gabriel Massadas"
 description = "A simple sql builder based on standard Python type hints."
-authors = ["Gabriel Massadas"]
-readme = "README.md"
-homepage = "https://github.com/G4brym/sqlify"
-documentation = "http://massadas.com/sqlify/"
-repository = "https://github.com/G4brym/sqlify"
-license = "BSD"
-keywords = ["psycopg2", "postgresql", "sqlite", "sqlite3", "sql", "database"]
+home-page = "https://github.com/G4brym/sqlify"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Operating System :: OS Independent",
@@ -27,55 +25,39 @@ classifiers = [
     "Topic :: Internet :: WWW/HTTP",
     "Typing :: Typed",
 ]
+description-file = "README.md"
+requires-python = ">=3.7.0"
 
-[tool.poetry.dependencies]
-python = "^3.7.0"
-psycopg2-binary = { version = "*", optional = true }
+[tool.flit.metadata.urls]
+Documentation = "http://massadas.com/sqlify/"
 
-[tool.poetry.dev-dependencies]
-pytest = "^6.2.4"
-mypy = "^0.812"
-flake8 = "^3.9.2"
-black = {version = "^21.5-beta.1", python = "^3.7"}
-mkdocs = "^1.2.1"
-mkdocs-material = "^7.1.9"
-mdx-include = "^1.4.1"
-coverage = {extras = ["toml"], version = "^5.5"}
-autoflake = "^1.4"
-isort = "^5.9.3"
-
-[tool.poetry.extras]
-postgresql = [ "psycopg2-binary" ]
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry-version-plugin]
-source = "init"
-
-[tool.coverage.run]
-parallel = true
-source = [
-#    "docs_src",
-    "tests",
-    "sqlify"
+[tool.flit.metadata.requires-extra]
+postgres = [
+    "psycopg2-binary>=2.9.0",
 ]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "@overload",
-    'if __name__ == "__main__":',
+test = [
+    "pytest >=6.2.4,<7.0.0",
+    "pytest-cov >=2.12.0,<4.0.0",
+    "mypy ==0.910",
+    "flake8 >=3.8.3,<4.0.0",
+    "black ==21.9b0",
+    "isort >=5.0.6,<6.0.0",
+]
+doc = [
+    "mkdocs >=1.1.2,<2.0.0",
+    "mkdocs-material >=7.1.9,<8.0.0",
+    "mdx-include >=1.4.1,<2.0.0",
+    "mkdocs-markdownextradata-plugin >=0.1.7,<0.3.0",
+    "typer-cli >=0.0.12,<0.0.13",
+    "pyyaml >=5.3.1,<6.0.0"
+]
+dev = [
+    "psycopg2-binary>=2.9.0",
 ]
 
 [tool.isort]
 profile = "black"
 known_third_party = ["sqlify"]
-skip_glob = [
-    "sqlify/__init__.py",
-]
-
 
 [tool.mypy]
 # --strict
@@ -93,3 +75,21 @@ warn_return_any = true
 implicit_reexport = false
 strict_equality = true
 # --strict end
+
+[[tool.mypy.overrides]]
+module = "sqlify.concurrency"
+warn_unused_ignores = false
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "sqlify.tests.*"
+ignore_missing_imports = true
+check_untyped_defs = true
+
+[tool.pytest.ini_options]
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+]
+xfail_strict = true
+junit_family = "xunit2"
