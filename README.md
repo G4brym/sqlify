@@ -1,18 +1,27 @@
-# [Sqlify](https://github.com/masroore/Sqlify)
+# [Sqlify](https://github.com/g4brym/Sqlify)
 This project is a fork from [pg_simple](https://github.com/masroore/pg_simple), that tries to implement a standard SQL
-python type hinting interface.
+with python type hinting interface.
+This fork also implements extra parameters like having or with queries.
 Other goals for this project is to support other types of databases like sqlite.
 
-The [pg_simple](https://github.com/masroore/pg_simple) module provides a simple yet efficient layer over `psycopg2` providing Python API for common SQL functions, explicit and implicit transactions management and database connection pooling for single and multi-threaded applications.
+The [Sqlify](https://github.com/g4brym/Sqlify) module provides a simple standardized interface while keeping the 
+benefits and speed of using raw queries over `psycopg2` or `sqlite3`
+This module is ment to work as a query builder, and you must provide your own integrations and session pooling if you want.
 
-`pg_simple` is not intended to provide ORM-like functionality, rather to make it easier to interact with the PostgreSQL database from python code for direct SQL access using convenient wrapper methods. The module wraps the excellent `psycopg2` library and most of the functionality is provided by this behind the scenes.
+`sqlify` is not intended to provide ORM-like functionality, rather to make it easier to interact with the database from 
+python code for direct SQL access using convenient wrapper methods.
 
-The `pg_simple` module provides:
+The `sqlify` module provides:
 
-* Simplified handling of database connections/cursor
-* Connection pool for single or multithreaded access
+* Python typed interface that can scale from just basic queries to some complex queries, for example using the
+[PostgreSQL With](https://www.postgresql.org/docs/9.1/queries-with.html)
 * Python API to wrap basic SQL functionality: select, update, delete, join et al
-* Query results as python namedtuple and dict objects (using `psycopg2.extras.NamedTupleCursor` and `psycopg2.extras.DictCursor` respectively)
+* Query results as python dict objects
+* Inserts/Updates/Deletes returning data as dict objects or the affected rows count
+* Error detection while coding due to the type hints (if you use a smart IDE like pycharm)
+* Auto commit/rollback when finishing one or multiple queries
+* Database migration tools (WIP)
+* Bulk insert (WIP)
 * Debug logging support
 
 
@@ -20,11 +29,11 @@ The `pg_simple` module provides:
 
 With `pip` or `easy_install`:
 
-```pip install pg_simple```
+```pip install sqlify```
 
 or:
 
-```easy_install pg_simple```
+```easy_install sqlify```
 
 or from the source:
 
@@ -33,118 +42,23 @@ or from the source:
 
 ## 30 Seconds Quick-start Guide
 
-* Step 1: Initialize a connection pool manager using `pg_simple.config_pool()`
-* Step 2: Create a database connection and cursor by instantiating a `pg_simple.PgSimple` object
+* Step 1: Connect to the database of your choice
+* Step 2: Using the Session class pass through the connection
+* Step 3: Enjoy your queries
 
 Here's a pseudo-example to illustrate the basic concepts:
 
 ```python
-import pg_simple
+import sqlite3
+from sqlify import Session
 
-connection_pool = pg_simple.config_pool(dsn='dbname=my_db user=my_username ...')
-
-with pg_simple.PgSimple(connection_pool) as db:
-    db.insert('table_name',
-              data={'column': 123,
-                    'another_column': 'blah blah'})
-    db.commit()
-
-with pg_simple.PgSimple(connection_pool) as db1:
-    rows = db1.fetchall('table_name')
+conn = sqlite3.connect('my_test.db')
+with Session(conn, autocommit=True) as sqlify:
+    rest = sqlify.fetchone(
+        table="test",
+        fields="column_1",
+    )
 ```
-
-
-## Connection pool management
-
-### Initialize the connection pool
-
-
-```python
-import pg_simple
-
-connection_pool = pg_simple.config_pool(max_conn=250,
-                      expiration=60, # idle timeout = 60 seconds
-                      host='localhost',
-                      port=5432,
-                      database='pg_simple',
-                      user='postgres',
-                      password='secret')
-```
-
-or, using `dsn`:
-
-```python
-connection_pool = pg_simple.config_pool(max_conn=250,
-                      expiration=60,
-                      dsn='dbname=database_name user=postgres password=secret')
-
-```
-
-or, using `db_url`:
-
-```python
-connection_pool = pg_simple.config_pool(max_conn=250,
-                      expiration=60,
-                      db_url= 'postgres://username:password@hostname:numeric_port/database')
-
-```
-
-The above snippets will create a connection pool capable of accommodating a maximum of 250 concurrent database connections. Once that limit is reached and the pool does not contain any idle connections, all subsequent new connection request will result in a `PoolError` exception (until the pool gets refilled with idle connections).
-
-Take caution to properly clean up all `pg_simple.PgSimple` objects after use (wrap the object inside python try-finally block or `with` statement). Once the object is released, it will quietly return the internal database connction to the idle pool. Failure to dispose `PgSimple` properly may result in pool exhaustion error.
-
-### Configure multiple connection pools
-To generate different connection pools simply define each connection:
-
-```python
-connection_pool_1 = pg_simple.config_pool(max_conn=250,
-                      expiration=60,
-                      dsn='dbname=database_name_1 user=postgres1 password=secret1')
-
-connection_pool_2 = pg_simple.config_pool(max_conn=250,
-                      expiration=60,
-                      dsn='dbname=database_name_2 user=postgres2 password=secret2')
-
-```
-
-After that you can use each connection pool object to generate connections to the databases as you would with only one connection.
-You can define as many of connection pool objects as your systems can handle and also both types (`SimpleConnectionPool` and `ThreadedConnectionPool`) at the same time.
-
-
-### Configure connection pool for thread-safe access
-
-The default `SimpleConnectionPool` pool manager is not thread-safe. To utilize the connection pool in multi-threaded apps, use the `ThreadedConnectionPool`:
-
-```python
-connection_pool = pg_simple.config_pool(max_conn=250,
-                      expiration=60,
-                      pool_manager=ThreadedConnectionPool,
-                      dsn='...')
-```
-
-
-### Disable connection pooling
-
-To disable connection pooling completely, set the `disable_pooling` parameter to True:
-
-```python
-connection_pool = pg_simple.config_pool(disable_pooling=True, dsn='...')
-```
-
-All database requests on this pool will create new connections on the fly, and all connections returned to the pool (upon disposal of `PgSimple` object or by explicitly invoking `pool.put_conn()`) will be discarded immediately.
-
-
-
-
-### Garbage collect stale connections
-
-To explicitly purge the pool of stale database connections (whose duration of stay in the pool exceeds the `expiration` timeout), invoke the `pool.purge_expired_connections()` method:
-
-```python
-connection_pool.purge_expired_connections()
-```
-
-Note that the pool is automatically scavenged for stale connections when an idle connection is returned to the pool (using the `pool.put_conn()` method).
 
 
 ## Basic Usage
@@ -154,55 +68,96 @@ Note that the pool is automatically scavenged for stale connections when an idle
 The following snippet will connect to the posgtresql server and allocate a cursor:
 
 ```python
-import sys
-import pg_simple
+import psycopg2
+from sqlify import Session
 
-db = pg_simple.PgSimple(log=sys.stdout,
-                        log_fmt=lambda x: '>> %s' % (x if isinstance(x, str) else x.query),
-                        nt_cursor=True)
+conn = psycopg2.connect("host=localhost dbname=test user=postgres password=postgres")
+with Session(conn, autocommit=True) as sqlify:
+    rest = sqlify.fetchone(
+        table="test",
+        fields="column_1",
+    )
 ```
 
-By default `PgSimple` generates result sets as `collections.namedtuple` objects (using `psycopg2.extras.NamedTupleCursor`). If you want to access the retrieved records using an interface similar to the Python dictionaries (using `psycopg2.extras.DictCursor`), set the `nt_cursor` parameter to `False`:
+By default `psycopg2` generates result sets as `collections.namedtuple` objects (using `psycopg2.extras.NamedTupleCursor`). 
+But because `sqlify` is connection agnostic you can easily modify it to use the `DictCursor` that returns a `Dict` object
 
 ```python
-db = pg_simple.PgSimple(connection_pool, nt_cursor=False)
+import psycopg2
+from psycopg2.extras import DictCursor
+
+conn = psycopg2.connect("host=localhost dbname=test user=postgres password=postgres", cursor_factory=DictCursor)
+```
+
+If you don't like context based interfaces (aka [with statement](https://www.geeksforgeeks.org/with-statement-in-python/))
+or it doesn't fit your architecture you can also assign it to a variable and use it as you did expect.
+But remember that by using it this way you lost the auto-commit/rollback feature and auto-close of the database connection
+
+```python
+sqlify = Session(conn, autocommit=True).session
+rest = sqlify.fetchone(
+    table="test",
+    fields="column_1",
+)
+
+sqlify.commit()
+sqlify.close()
+```
+
+### Fetching a single record
+
+```python
+with Session(conn, autocommit=True) as sqlify:
+    book = sqlify.fetchone(
+        table='books', 
+        fields="*",
+        where=(
+            "published = %(publish_date)s",
+            dict(
+                publish_date=datetime.date(2002, 2, 1),
+            ),
+        ),
+    )
+                   
+print(f"{book.name} was published on {book.published}")
+```
+
+### Fetching multiple records
+
+```python
+from sqlify import Order
+
+with Session(conn, autocommit=True) as sqlify:
+    books = sqlify.fetchone(
+        table='books',
+        fields=['name AS n', 'genre AS g'],
+        where=(
+            "published BETWENN %(since)s and %(to)s",
+            dict(
+                since=datetime.date(2005, 2, 1),
+                to=datetime.date(2009, 2, 1),
+            ),
+        ),
+        order=("published", Order.DESC),
+        limit=5,
+        offset=2,
+    )
+
+for book in books:
+    print(f"{book.name} was published on {book.published}")
 ```
 
 ### Raw SQL execution
 
-```python
->>> db.execute('SELECT tablename FROM pg_tables WHERE schemaname=%s and tablename=%s', ['public', 'books'])
-<cursor object at 0x102352a50; closed: 0>
-```
-
-### Dropping and creating tables
+In raw queries you can use both `list` and `dict` annotations
 
 ```python
-db.drop('books')
-
-db.create('books',
-          '''
-"id" SERIAL NOT NULL,
-"type" VARCHAR(20) NOT NULL,
-"name" VARCHAR(40) NOT NULL,
-"price" MONEY NOT NULL,
-"published" DATE NOT NULL,
-"modified" TIMESTAMP(6) NOT NULL DEFAULT now()
-'''
-)
-
-db.execute('''ALTER TABLE "books" ADD CONSTRAINT "books_pkey" PRIMARY KEY ("id")''')
-db.commit()
-
+with Session(conn, autocommit=True) as sqlify:
+    sqlify.execute('SELECT tablename FROM pg_tables WHERE schemaname=%s and tablename=%s', ['public', 'books'])
+    sqlify.execute('SELECT name FROM books WHERE author=%(author)s', {"author": "Andre"})
 ```
 
-### Emptying a table or set of tables
-
-```python
-db.truncate('tbl1')
-db.truncate('tbl2, tbl3', restart_identity=True, cascade=True)
-db.commit()
-```
+## WIP down from here
 
 ### Inserting rows
 
@@ -238,6 +193,35 @@ db.delete('books', where=('published >= %s', [datetime.date(2005, 1, 31)]))
 db.commit()
 ```
 
+### Dropping and creating tables
+
+```python
+db.drop('books')
+
+db.create('books',
+          '''
+"id" SERIAL NOT NULL,
+"type" VARCHAR(20) NOT NULL,
+"name" VARCHAR(40) NOT NULL,
+"price" MONEY NOT NULL,
+"published" DATE NOT NULL,
+"modified" TIMESTAMP(6) NOT NULL DEFAULT now()
+'''
+)
+
+db.execute('''ALTER TABLE "books" ADD CONSTRAINT "books_pkey" PRIMARY KEY ("id")''')
+db.commit()
+
+```
+
+### Emptying a table or set of tables
+
+```python
+db.truncate('tbl1')
+db.truncate('tbl2, tbl3', restart_identity=True, cascade=True)
+db.commit()
+```
+
 ### Inserting/updating/deleting rows with return value
 
 ```python
@@ -262,30 +246,6 @@ rows = db.delete('books',
                  returning='name')
 for r in rows:
     print(r.name)
-```
-
-### Fetching a single record
-
-```python
-book = db.fetchone('books', 
-                   fields=['name', 'published'], 
-                   where=('published = %s', [datetime.date(2002, 2, 1)]))
-                   
-print(book.name + 'was published on ' + book[1])
-```
-
-### Fetching multiple records
-
-```python
-books = db.fetchall('books',
-                    fields=['name AS n', 'genre AS g'],
-                    where=('published BETWEEN %s AND %s', [datetime.date(2005, 2, 1), datetime.date(2009, 2, 1)]),
-                    order=['published', 'DESC'], 
-                    limit=5, 
-                    offset=2)
-
-for book in books:
-    print(book.n + 'belongs to ' + book[1])
 ```
 
 ### Explicit database transaction management

@@ -57,7 +57,10 @@ class Session(object):
 
     def __exit__(self, type_, value, traceback):
         if self._autocommit:
-            self._connection.commit()
+            if isinstance(type_, Exception):
+                self._connection.rollback()
+            else:
+                self._connection.commit()
 
         if self.is_open:
             self.close()
