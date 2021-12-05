@@ -211,7 +211,7 @@ class BaseSqlify(object):
 
     def create(self, table: str, schema: str) -> None:
         """Create a table with the schema provided
-        pg_db.create('my_table','id SERIAL PRIMARY KEY, name TEXT')"""
+        sqlify.create('my_table','id SERIAL PRIMARY KEY, name TEXT')"""
         self.execute("CREATE TABLE {} ({})".format(table, schema))
 
     def commit(self) -> None:

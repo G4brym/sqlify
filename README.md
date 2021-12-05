@@ -132,10 +132,14 @@ with Session(conn, autocommit=True) as sqlify:
         table='books',
         fields=['name AS n', 'genre AS g'],
         where=(
-            "published BETWENN %(since)s and %(to)s",
+            [
+                "published BETWENN %(since)s and %(to)s",
+                "gender = %(gender)s",
+            ],
             dict(
                 since=datetime.date(2005, 2, 1),
                 to=datetime.date(2009, 2, 1),
+                gender="fiction",
             ),
         ),
         order=("published", Order.DESC),
@@ -157,114 +161,163 @@ with Session(conn, autocommit=True) as sqlify:
     sqlify.execute('SELECT name FROM books WHERE author=%(author)s', {"author": "Andre"})
 ```
 
-## WIP down from here
-
 ### Inserting rows
 
 ```python
-for i in range(1, 10):
-    db.insert("books",
-              {"genre": "fiction",
-               "name": "Book Name vol. %d" % i,
-               "price": 1.23 * i,
-               "published": "%d-%d-1" % (2000 + i, i)})
+with Session(conn, autocommit=True) as sqlify:
+    for i in range(1, 10):
+        sqlify.insert(
+            table="books",
+            data=dict(
+                name=f"Book Name vol. {i}",
+                price=1.23 * i,
+                genre="fiction",
+                published=f"{2000 + i}-{i}-1",
+            ),
+        )
 
-db.commit()
+    # DB commit is already called when the session context exits without any exception
+    # You can disable this with autocommit=False
 ```
 
 ### Updating rows
 
 ```python
-with pg_simple.PgSimple(connection_pool) as db1:
-    db1.update('books',
-               data={'name': 'An expensive book',
-                     'price': 998.997,
-                     'genre': 'non-fiction',
-                     'modified': 'NOW()'},
-               where=('published = %s', [datetime.date(2001, 1, 1)]))
-               
-    db1.commit()
+from sqlify import RawSQL
+
+with Session(conn, autocommit=True) as sqlify:
+    affected_rows = sqlify.update(
+        table="books",
+        where=(
+            "published = %(published)s",
+            dict(
+                published=datetime.date(2001, 1, 1)
+            ),
+        ),
+        data=dict(
+            genre="non-fiction",
+            modified=RawSQL("now()"),
+        ),
+    )
+    
+    # Commit is implicit
+    
+print(f"Lines updated in this query: {affected_rows}")
 ```
 
 ### Deleting rows
 
 ```python
-db.delete('books', where=('published >= %s', [datetime.date(2005, 1, 31)]))
-db.commit()
+with Session(conn, autocommit=True) as sqlify:
+    deleted_rows = sqlify.delete(
+        table="books",
+        where=(
+            "published >= %(published)s",
+            dict(published=datetime.date(2005, 1, 31)),
+        ),
+    )
+
+    # Commit is implicit
+
+print(f"Lines deleted in this query: {deleted_rows}")
 ```
 
 ### Dropping and creating tables
 
 ```python
-db.drop('books')
+with Session(conn, autocommit=True) as sqlify:
+    sqlify.drop('books')
 
-db.create('books',
-          '''
-"id" SERIAL NOT NULL,
-"type" VARCHAR(20) NOT NULL,
-"name" VARCHAR(40) NOT NULL,
-"price" MONEY NOT NULL,
-"published" DATE NOT NULL,
-"modified" TIMESTAMP(6) NOT NULL DEFAULT now()
-'''
-)
+    sqlify.create('books',
+        '''
+        "id" SERIAL NOT NULL,
+        "type" VARCHAR(20) NOT NULL,
+        "name" VARCHAR(40) NOT NULL,
+        "price" MONEY NOT NULL,
+        "published" DATE NOT NULL,
+        "modified" TIMESTAMP(6) NOT NULL DEFAULT now()
+        '''
+    )
 
-db.execute('''ALTER TABLE "books" ADD CONSTRAINT "books_pkey" PRIMARY KEY ("id")''')
-db.commit()
+    sqlify.execute('''ALTER TABLE "books" ADD CONSTRAINT "books_pkey" PRIMARY KEY ("id")''')
 
+    # Commit is implicit
 ```
 
 ### Emptying a table or set of tables
 
 ```python
-db.truncate('tbl1')
-db.truncate('tbl2, tbl3', restart_identity=True, cascade=True)
-db.commit()
+with Session(conn, autocommit=True) as sqlify:
+    sqlify.truncate('tbl1')
+    sqlify.truncate('tbl2, tbl3', restart_identity=True, cascade=True)
+
+    # Commit is implicit
 ```
 
 ### Inserting/updating/deleting rows with return value
 
 ```python
-row = db.insert("books",
-                {"type": "fiction",
-                 "name": "Book with ID",
-                 "price": 123.45,
-                 "published": "1997-01-31"},
-                returning='id')
+with Session(conn, autocommit=True) as sqlify:
+    row = sqlify.insert(
+        table="books",
+        data=dict(
+            name=f"Book Name vol. {i}",
+            price=1.23 * i,
+            genre="fiction",
+            published=f"{2000 + i}-{i}-1",
+        ),
+        returning="id",
+    )
 print(row.id)
 
-rows = db.update('books',
-                 data={'name': 'Another expensive book',
-                       'price': 500.50,
-                       'modified': 'NOW()'},
-                 where=('published = %s', [datetime.date(2006, 6, 1)]),
-                 returning='modified')
-print(rows[0].modified)
+with Session(conn, autocommit=True) as sqlify:
+    rows = sqlify.update(
+        table="books",
+        where=(
+            "published = %(published)s",
+            dict(
+                published=datetime.date(2001, 1, 1)
+            ),
+        ),
+        data=dict(
+            genre="non-fiction",
+            modified=RawSQL("now()"),
+        ),
+        returning="*",
+    )
+for row in rows:
+    print(row.modified)
 
-rows = db.delete('books', 
-                 where=('published >= %s', [datetime.date(2005, 1, 31)]), 
-                 returning='name')
-for r in rows:
-    print(r.name)
+with Session(conn, autocommit=True) as sqlify:
+    rows = sqlify.delete(
+        table="books",
+        where=(
+            "published >= %(published)s",
+            dict(published=datetime.date(2005, 1, 31)),
+        ),
+        returning="name",
+    )
+for row in rows:
+    print(row.name)
 ```
 
 ### Explicit database transaction management
 
 ```python
-with pg_simple.PgSimple(connection_pool) as _db:
+with Session(conn, autocommit=False) as sqlify:
     try:
-        _db.execute('Some SQL statement')
-        _db.commit()
+        sqlify.execute('Some SQL statement')
+        sqlify.commit()
     except:
-        _db.rollback()
+        sqlify.rollback()
 ```
 
 ### Implicit database transaction management
 
 ```python
-with pg_simple.PgSimple(connection_pool) as _db:
-    _db.execute('Some SQL statement')
-    _db.commit()
+with Session(conn, autocommit=True) as sqlify:
+    sqlify.execute('Some SQL that trows an error')
+    # Rollback will automatically be called and the exception will continue down the execution tree
 ```
 
-The above transaction will be rolled back automatically should something goes awry.
+The above transaction will be rolled back automatically should something goes wrong.
