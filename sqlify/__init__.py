@@ -1,6 +1,6 @@
 """A simple sql builder based on standard Python type hints"""
 
-__version__ = '0.4.2'
+__version__ = '0.6.0'
 __all__ = [
     "BaseSqlify",
     "Sqlite3Sqlify",
