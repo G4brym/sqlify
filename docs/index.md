@@ -21,7 +21,8 @@ The `sqlify` module provides:
 * Query results as python dict objects
 * Inserts/Updates/Deletes returning data as dict objects or the affected rows count
 * Auto commit/rollback when finishing one or multiple queries
-* Database migration tools (WIP)
+* Database migration tools
+* Typer cli for migration commands
 * Bulk insert (WIP)
 * On the fly error prevention when developing with a smart IDE like pycharm (due to the advanced type hinting)
 * Debug logging support

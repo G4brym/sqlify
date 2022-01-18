@@ -19,7 +19,7 @@ def build_typer_cli(migrations_service: Migrations) -> Typer:
     def display_migrations(migrations: List[str]) -> None:
         for filename in migrations:
             typer.secho(
-                f"\t- {migrations_service.get_migration_name(filename)}",
+                f" - {migrations_service.get_migration_name(filename)}",
                 fg=typer.colors.GREEN,
             )
 
@@ -43,10 +43,10 @@ def build_typer_cli(migrations_service: Migrations) -> Typer:
         migrations = migrations_service.discover_migrations()
 
         if filename is not None:
-            if filename in migrations:
-                migrations = [filename]
-            elif migrations_service.get_migration_name(filename) in migrations:
+            if {filename, f"{filename}.sql", migrations_service.get_migration_name(filename)}.intersection(set(migrations)):
                 migrations = [migrations_service.get_migration_name(filename)]
+            elif filename.isdigit() and len([i for i in migrations if i.startswith(filename.zfill(4))]) > 0:
+                migrations = [i for i in migrations if i.startswith(filename.zfill(4))]
             else:
                 migrations = []
 

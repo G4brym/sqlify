@@ -13,8 +13,8 @@ class Migrations():
             self,
             migrations_path: str,
             sqlify: BaseSqlify,
-                 migration_name_template: str = "{migration_number}_{date}_{hour}.sql",
-                 migration_table_name: str = "db_migrations"
+            migration_name_template: str = "{migration_number}_{date}_{hour}.sql",
+            migration_table_name: str = "db_migrations"
     ) -> None:
         self._migrations_path = migrations_path
         self._sqlify = sqlify
@@ -22,16 +22,44 @@ class Migrations():
         self._migration_name_template = migration_name_template
         self._migration_table_name = migration_table_name
 
+        self._init_migrations_table()
+
+    def _init_migrations_table(self) -> None:
+        initial_migration = f"""
+            CREATE TABLE IF NOT EXISTS {self._migration_table_name}
+            (
+                id serial constraint {self._migration_table_name}_pk primary key,
+                name varchar(32) not null,
+                applied_at timestamp default timezone('utc'::text, now()) not null
+            );
+            
+            CREATE UNIQUE INDEX IF NOT EXISTS {self._migration_table_name}_name_uindex
+                ON {self._migration_table_name} (name);
+        """
+
+        self._sqlify.execute(initial_migration)
+        self._sqlify.commit()
+
+    def _get_next_migration_number(self) -> int:
+        next_migration_number = 0
+        for (dirpath, dirnames, filenames) in os.walk(self._migrations_path):
+            for filename in filenames:
+                _number = filename.split("_")[0]
+                next_migration_number = max(next_migration_number, int(_number))
+
+        return next_migration_number +1
+
     def make_migration(self) -> str:
         now = datetime.now()
-        migration_number = len(self.discover_migrations(unapplied_only=False)) + 1
+        migration_number = self._get_next_migration_number()
 
-        filename = self._migration_name_template.format(dict(
-            migration_number=migration_number,
+        filename = self._migration_name_template.format(
+            migration_number=str(migration_number).zfill(4),
             date=now.strftime("%Y%m%d"),
             hour=now.strftime("%H%M"),
-        ))
+        )
 
+        os.makedirs(self._migrations_path, exist_ok=True)
         with open(os.path.join(self._migrations_path, filename), "a") as f:
             f.write(f"-- Migration number: {migration_number} \t {now.strftime('%Y-%m-%d %H:%M')}\n")
             f.write("BEGIN;\n\n\n\nCOMMIT;\n")
@@ -87,7 +115,7 @@ class Migrations():
         if _already_applied is not None:
             raise MigrationAlreadyAppliedException(f"Migration {filename} is already applied!")
 
-        if not fake:
+        if fake is False:
             # This can trow an exception, but it shouldn't be caught
             self._sqlify.execute(
                 self._get_migration_content(filename)
