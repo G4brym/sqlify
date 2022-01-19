@@ -1,6 +1,6 @@
 site_name: Sqlify
 site_description: A simple sql builder based on standard Python type hints
-site_url: https://massadas.com/sqlify/
+site_url: https://sqlify.massadas.com/
 theme:
   name: material
   palette:

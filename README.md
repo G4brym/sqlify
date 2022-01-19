@@ -4,7 +4,7 @@ with python type hinting interface.
 This fork also implements extra parameters like having or with queries.
 Other goals for this project is to support other types of databases like sqlite.
 
-[Read full documentation here](https://massadas.com/sqlify/)
+[Read full documentation here](https://sqlify.massadas.com/)
 
 The [Sqlify](https://github.com/g4brym/Sqlify) module provides a simple standardized interface while keeping the 
 benefits and speed of using raw queries over `psycopg2` or `sqlite3`
