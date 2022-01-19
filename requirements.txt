@@ -1,1 +1,6 @@
 mkdocs==1.2.3
+mkdocs-material==7.3.6
+mdx-include==1.4.1
+mkdocs-markdownextradata-plugin==0.2.4
+typer-cli==0.0.12
+pyyaml==5.4.1
