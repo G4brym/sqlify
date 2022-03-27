@@ -48,6 +48,9 @@ class Migrations():
                     ON {self._migration_table_name} (name);
             """
 
+        else:
+            raise NotImplementedError()
+
         self._sqlify.execute(initial_migration)
         self._sqlify.commit()
 
