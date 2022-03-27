@@ -39,7 +39,7 @@ def build_typer_cli(migrations_service: Migrations) -> Typer:
         typer.secho(f"{migrations_service.make_migration()} Created", fg=typer.colors.GREEN)
 
     @cli.command()
-    def migrate(filename: Optional[str] = None, fake: bool = False):
+    def migrate(filename: Optional[str] = None, fake: bool = False, yes: bool = False):
         migrations = migrations_service.discover_migrations()
 
         if filename is not None:
@@ -60,7 +60,7 @@ def build_typer_cli(migrations_service: Migrations) -> Typer:
         typer.secho("Migrations to apply:", fg=typer.colors.GREEN)
         display_migrations(migrations)
 
-        _continue = typer.confirm("Are you sure you want to continue?")
+        _continue = yes or typer.confirm("Are you sure you want to continue?")
         if _continue is False:
             typer.echo("No Migrations applied")
             raise typer.Abort()

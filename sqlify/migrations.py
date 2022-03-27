@@ -89,6 +89,13 @@ class Migrations():
                 table=self._migration_table_name,
                 fields="name",
             )
+
+            if len(exclude) > 0 and isinstance(exclude[0], dict):
+                exclude = [
+                    item.values()
+                    for item in exclude
+                ]
+
             exclude = list(itertools.chain.from_iterable(exclude))
 
         files = []
@@ -117,11 +124,15 @@ class Migrations():
     def apply_migration(
             self, filename: str, fake: bool = False
     ) -> None:
+        condition = "name = %(name)s"
+        if isinstance(self._sqlify, Sqlite3Sqlify):
+            condition = "name = :name"
+
         _already_applied = self._sqlify.fetchone(
             table=self._migration_table_name,
             fields="1",
             where=(
-                "name = %(name)s",
+                condition,
                 dict(name=self.get_migration_name(filename)),
             ),
         )
