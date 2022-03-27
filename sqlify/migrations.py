@@ -5,7 +5,7 @@ from typing import List
 
 from .exceptions import MigrationAlreadyAppliedException
 
-from .builder import BaseSqlify
+from .builder import BaseSqlify, Sqlite3Sqlify, Psycopg2Sqlify
 
 
 class Migrations():
@@ -25,17 +25,28 @@ class Migrations():
         self._init_migrations_table()
 
     def _init_migrations_table(self) -> None:
-        initial_migration = f"""
-            CREATE TABLE IF NOT EXISTS {self._migration_table_name}
-            (
-                id serial constraint {self._migration_table_name}_pk primary key,
-                name varchar(32) not null,
-                applied_at timestamp default timezone('utc'::text, now()) not null
-            );
-            
-            CREATE UNIQUE INDEX IF NOT EXISTS {self._migration_table_name}_name_uindex
-                ON {self._migration_table_name} (name);
-        """
+        if isinstance(self._sqlify, Sqlite3Sqlify):
+            initial_migration = f"""
+                CREATE TABLE IF NOT EXISTS {self._migration_table_name}
+                (
+                    id integer constraint table_name_pk primary key autoincrement,
+                    name text,
+                    applied_at timestamp default CURRENT_TIMESTAMP not null
+                );
+            """
+
+        elif isinstance(self._sqlify, Psycopg2Sqlify):
+            initial_migration = f"""
+                CREATE TABLE IF NOT EXISTS {self._migration_table_name}
+                (
+                    id serial constraint {self._migration_table_name}_pk primary key,
+                    name varchar(32) not null,
+                    applied_at timestamp default timezone('utc'::text, now()) not null
+                );
+                
+                CREATE UNIQUE INDEX IF NOT EXISTS {self._migration_table_name}_name_uindex
+                    ON {self._migration_table_name} (name);
+            """
 
         self._sqlify.execute(initial_migration)
         self._sqlify.commit()
